@@ -120,13 +120,8 @@ check_space() {
 
     # Obtener espacio disponible con unidad
     local available_raw=$(df -h "$HOME" | awk 'NR==2 {print $4}')
-    debug_log "Espacio raw: '$available_raw'"
-
     local available_value=$(echo "$available_raw" | sed 's/[^0-9.]//g')
-    debug_log "Valor numérico: '$available_value'"
-
     local available_unit=$(echo "$available_raw" | sed 's/[0-9.]//g' | tr '[:lower:]' '[:upper:]')
-    debug_log "Unidad: '$available_unit'"
 
     # Convertir a MB para comparación (sin usar bc)
     local available_mb=0
@@ -139,11 +134,9 @@ check_space() {
                 # Fallback sin awk (menos preciso)
                 available_mb=$(( ${available_value%.*} * 1024 ))
             fi
-            debug_log "Conversión GB->MB: ${available_mb}MB"
             ;;
         M|MB)
             available_mb=${available_value%.*}
-            debug_log "Ya en MB: ${available_mb}MB"
             ;;
         K|KB)
             # Convertir KB a MB (dividir por 1024)
@@ -152,7 +145,6 @@ check_space() {
             else
                 available_mb=$(( ${available_value%.*} / 1024 ))
             fi
-            debug_log "Conversión KB->MB: ${available_mb}MB"
             ;;
         T|TB)
             # Convertir TB a MB
@@ -161,18 +153,15 @@ check_space() {
             else
                 available_mb=$(( ${available_value%.*} * 1024 * 1024 ))
             fi
-            debug_log "Conversión TB->MB: ${available_mb}MB"
             ;;
         *)
             # Si no podemos determinar, asumir que hay suficiente espacio
-            debug_log "Unidad desconocida, asumiendo espacio suficiente"
             log_success "Espacio: ${available_raw} disponibles"
             return 0
             ;;
     esac
 
     local required=500  # MB mínimos requeridos
-    debug_log "Espacio disponible: ${available_mb}MB, requerido: ${required}MB"
 
     if [ "$available_mb" -lt "$required" ]; then
         log_warning "Espacio bajo: ${available_raw} disponibles (${available_mb}MB)"

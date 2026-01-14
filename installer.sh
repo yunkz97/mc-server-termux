@@ -34,10 +34,6 @@ print_header() {
     echo "     🎮 MC SERVER TERMUX - INSTALADOR v${VERSION}"
     echo "════════════════════════════════════════════════════════"
     echo -e "${NC}\n"
-
-    # Mostrar directorio temporal
-    echo -e "${BLUE}Directorio temporal: ${TMP_DIR}${NC}"
-    echo ""
 }
 
 log_step() { echo -e "${BLUE}[→]${NC} $1"; }
@@ -181,14 +177,17 @@ check_space() {
 update_packages() {
     log_step "Actualizando repositorios..."
 
+    local log_file="$HOME/.mc-installer-pkg-update.log"
+
     {
         yes | pkg update 2>&1
-    } > "$TMP_DIR/pkg_update.log" &
+    } > "$log_file" &
 
     spinner $!
     wait $!
 
     log_success "Repositorios actualizados"
+    rm -f "$log_file"
 }
 
 install_package() {
@@ -203,19 +202,22 @@ install_package() {
 
     log_step "Instalando $display_name..."
 
+    local log_file="$HOME/.mc-installer-pkg-${package}.log"
+
     {
         yes | pkg install "$package" 2>&1
-    } > "$TMP_DIR/pkg_${package}.log" &
+    } > "$log_file" &
 
     local pid=$!
     spinner $pid
 
     if wait $pid; then
         log_success "$display_name instalado"
+        rm -f "$log_file"
         return 0
     else
         log_error "Error instalando $display_name"
-        log_info "Ver detalles en: $TMP_DIR/pkg_${package}.log"
+        log_info "Ver detalles en: $log_file"
         return 1
     fi
 }
@@ -343,18 +345,21 @@ install_python_deps() {
         exit 1
     fi
 
+    local log_file="$HOME/.mc-installer-pip.log"
+
     {
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
-    } > "$TMP_DIR/pip_install.log" 2>&1 &
+    } > "$log_file" 2>&1 &
 
     spinner $!
 
     if wait $!; then
         log_success "Dependencias Python instaladas"
+        rm -f "$log_file"
     else
         log_error "Error instalando dependencias Python"
-        log_info "Ver detalles en: $TMP_DIR/pip_install.log"
+        log_info "Ver detalles en: $log_file"
         exit 1
     fi
 }

@@ -35,12 +35,9 @@ print_header() {
     echo "════════════════════════════════════════════════════════"
     echo -e "${NC}\n"
 
-    if [ "$DEBUG" = "1" ]; then
-        echo -e "${YELLOW}[MODO DEBUG ACTIVADO]${NC}"
-        echo "  TMP_DIR: $TMP_DIR"
-        echo "  BASE_DIR: $BASE_DIR"
-        echo ""
-    fi
+    # Mostrar directorio temporal
+    echo -e "${BLUE}Directorio temporal: ${TMP_DIR}${NC}"
+    echo ""
 }
 
 log_step() { echo -e "${BLUE}[→]${NC} $1"; }

@@ -34,6 +34,13 @@ print_header() {
     echo "     🎮 MC SERVER TERMUX - INSTALADOR v${VERSION}"
     echo "════════════════════════════════════════════════════════"
     echo -e "${NC}\n"
+
+    if [ "$DEBUG" = "1" ]; then
+        echo -e "${YELLOW}[MODO DEBUG ACTIVADO]${NC}"
+        echo "  TMP_DIR: $TMP_DIR"
+        echo "  BASE_DIR: $BASE_DIR"
+        echo ""
+    fi
 }
 
 log_step() { echo -e "${BLUE}[→]${NC} $1"; }
@@ -111,11 +118,64 @@ check_internet() {
 check_space() {
     log_step "Verificando espacio disponible..."
 
-    local available=$(df -h "$HOME" | awk 'NR==2 {print $4}' | sed 's/[^0-9.]//g')
-    local required=500  # MB mínimos requeridos
+    # Obtener espacio disponible con unidad
+    local available_raw=$(df -h "$HOME" | awk 'NR==2 {print $4}')
+    debug_log "Espacio raw: '$available_raw'"
 
-    if (( $(echo "$available < $required" | bc -l 2>/dev/null || echo "0") )); then
-        log_warning "Espacio bajo: ${available}MB disponibles"
+    local available_value=$(echo "$available_raw" | sed 's/[^0-9.]//g')
+    debug_log "Valor numérico: '$available_value'"
+
+    local available_unit=$(echo "$available_raw" | sed 's/[0-9.]//g' | tr '[:lower:]' '[:upper:]')
+    debug_log "Unidad: '$available_unit'"
+
+    # Convertir a MB para comparación (sin usar bc)
+    local available_mb=0
+    case "$available_unit" in
+        G|GB)
+            # Convertir GB a MB (multiplicar por 1024)
+            if command -v awk &> /dev/null; then
+                available_mb=$(awk "BEGIN {printf \"%.0f\", ${available_value} * 1024}")
+            else
+                # Fallback sin awk (menos preciso)
+                available_mb=$(( ${available_value%.*} * 1024 ))
+            fi
+            debug_log "Conversión GB->MB: ${available_mb}MB"
+            ;;
+        M|MB)
+            available_mb=${available_value%.*}
+            debug_log "Ya en MB: ${available_mb}MB"
+            ;;
+        K|KB)
+            # Convertir KB a MB (dividir por 1024)
+            if command -v awk &> /dev/null; then
+                available_mb=$(awk "BEGIN {printf \"%.0f\", ${available_value} / 1024}")
+            else
+                available_mb=$(( ${available_value%.*} / 1024 ))
+            fi
+            debug_log "Conversión KB->MB: ${available_mb}MB"
+            ;;
+        T|TB)
+            # Convertir TB a MB
+            if command -v awk &> /dev/null; then
+                available_mb=$(awk "BEGIN {printf \"%.0f\", ${available_value} * 1024 * 1024}")
+            else
+                available_mb=$(( ${available_value%.*} * 1024 * 1024 ))
+            fi
+            debug_log "Conversión TB->MB: ${available_mb}MB"
+            ;;
+        *)
+            # Si no podemos determinar, asumir que hay suficiente espacio
+            debug_log "Unidad desconocida, asumiendo espacio suficiente"
+            log_success "Espacio: ${available_raw} disponibles"
+            return 0
+            ;;
+    esac
+
+    local required=500  # MB mínimos requeridos
+    debug_log "Espacio disponible: ${available_mb}MB, requerido: ${required}MB"
+
+    if [ "$available_mb" -lt "$required" ]; then
+        log_warning "Espacio bajo: ${available_raw} disponibles (${available_mb}MB)"
         log_info "Se recomiendan al menos ${required}MB libres"
         echo ""
         read -p "¿Continuar de todos modos? (s/N): " -r
@@ -124,7 +184,7 @@ check_space() {
             exit 0
         fi
     else
-        log_success "Espacio suficiente (${available}MB disponibles)"
+        log_success "Espacio suficiente (${available_raw} disponibles)"
     fi
 }
 
@@ -137,7 +197,7 @@ update_packages() {
 
     {
         yes | pkg update 2>&1
-    } > /tmp/pkg_update.log &
+    } > "$TMP_DIR/pkg_update.log" &
 
     spinner $!
     wait $!
@@ -159,7 +219,7 @@ install_package() {
 
     {
         yes | pkg install "$package" 2>&1
-    } > "/tmp/pkg_${package}.log" &
+    } > "$TMP_DIR/pkg_${package}.log" &
 
     local pid=$!
     spinner $pid
@@ -169,7 +229,7 @@ install_package() {
         return 0
     else
         log_error "Error instalando $display_name"
-        log_info "Ver detalles en: /tmp/pkg_${package}.log"
+        log_info "Ver detalles en: $TMP_DIR/pkg_${package}.log"
         return 1
     fi
 }
@@ -300,7 +360,7 @@ install_python_deps() {
     {
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
-    } > /tmp/pip_install.log 2>&1 &
+    } > "$TMP_DIR/pip_install.log" 2>&1 &
 
     spinner $!
 
@@ -308,7 +368,7 @@ install_python_deps() {
         log_success "Dependencias Python instaladas"
     else
         log_error "Error instalando dependencias Python"
-        log_info "Ver detalles en: /tmp/pip_install.log"
+        log_info "Ver detalles en: $TMP_DIR/pip_install.log"
         exit 1
     fi
 }

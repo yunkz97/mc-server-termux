@@ -609,3 +609,5 @@ trap 'echo ""; log_error "Instalación interrumpida"; exit 1' INT TERM
 
 # Ejecutar
 main "$@"
+
+# wow

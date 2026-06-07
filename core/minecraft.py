@@ -16,6 +16,7 @@ class MinecraftServer:
     def __init__(self, settings, process_manager):
         self.settings = settings
         self.pm = process_manager
+        self._log_handle = None
 
         self.jar_path = settings.get_server_jar_path()
         self.server_dir = settings.server_dir
@@ -59,6 +60,7 @@ class MinecraftServer:
                 pid_file=self.pid_file,
                 log_file=self.log_file,
                 cwd=self.server_dir,
+                stdin_pipe=True,
             )
 
             # Esperar a que inicie
@@ -93,15 +95,32 @@ class MinecraftServer:
 
         # Intentar comando stop si es posible
         self._send_command("stop")
-        time.sleep(2)
 
-        # Usar process manager para detener
-        if self.pm.stop_process(self.pid_file, timeout=timeout):
-            self._log("Servidor detenido correctamente")
+        # Cerrar stdin para que el proceso sepa que no habrá más input
+        if self.process and self.process.stdin:
+            try:
+                self.process.stdin.close()
+            except Exception:
+                pass
+
+        # Esperar a que el proceso termine gracefulmente
+        try:
+            self.process.wait(timeout=timeout)
+            self.pid_file.unlink(missing_ok=True)
             self.process = None
+            self._log("Servidor detenido correctamente")
             return True
-        else:
-            self._log("Error deteniendo el servidor")
+        except subprocess.TimeoutExpired:
+            self._log("Timeout esperando cierre, forzando...")
+            if self.pm.stop_process(self.pid_file, timeout=10):
+                self.process = None
+                self._log("Servidor detenido forzosamente")
+                return True
+            else:
+                self._log("Error deteniendo el servidor")
+                return False
+        except Exception as e:
+            self._log(f"Error deteniendo: {e}")
             return False
 
     def restart(self) -> bool:
@@ -140,10 +159,8 @@ class MinecraftServer:
     def _send_command(self, command: str) -> bool:
         """
         Envía un comando al servidor Minecraft.
-
         Args:
             command: Comando a enviar
-
         Returns:
             True si se envió correctamente
         """
@@ -151,14 +168,10 @@ class MinecraftServer:
             return False
 
         try:
-            # Para Minecraft, necesitamos escribir al stdin del proceso
-            # Como estamos usando nohup y redirección, esto es complicado
-            # La solución es usar un named pipe o archivo temporal
-
-            input_file = self.settings.run_dir / "server_input.txt"
-            with open(input_file, "a") as f:
-                f.write(f"{command}\n")
-
+            if self.process and self.process.stdin:
+                self.process.stdin.write(f"{command}\n")
+                self.process.stdin.flush()
+                return True
             return True
         except Exception as e:
             self._log(f"Error enviando comando: {e}")

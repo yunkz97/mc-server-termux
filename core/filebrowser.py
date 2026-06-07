@@ -236,7 +236,7 @@ class FilebrowserManager:
         self.settings.filebrowser_password = password
 
         self._log(
-            f"Credenciales generadas: {self.settings.filebrowser_user} / {password}"
+            f"Credenciales generadas para usuario: {self.settings.filebrowser_user}"
         )
 
     def get_credentials(self) -> dict:

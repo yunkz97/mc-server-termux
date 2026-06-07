@@ -74,9 +74,14 @@ class PlayitManager:
             # Limpiar log anterior
             self.log_file.write_text("")
 
-            # Iniciar proceso con proot
+            # Determinar el runner: termux-chroot si está disponible, si no directo
+            runner = self._get_proot_runner()
+
+            # Iniciador del proceso
+            cmd = runner + [str(self.binary)]
+
             self.process = subprocess.Popen(
-                ["termux-chroot", str(self.binary)],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -397,6 +402,22 @@ class PlayitManager:
             'pid': self.process.pid if self.process else None
         }
 
+    @staticmethod
+    def _get_proot_runner() -> list:
+        """
+        Determina el comando runner para playit.
+        Usa termux-chroot si está disponible, si no ejecuta directo.
+
+        Returns:
+            Lista con el comando runner (o lista vacía)
+        """
+        import shutil
+        if shutil.which("termux-chroot"):
+            return ["termux-chroot"]
+        if shutil.which("proot"):
+            return ["proot"]
+        return []
+
     def _save_state(self):
         """Guarda el estado actual a disco."""
         import json
@@ -449,9 +470,4 @@ class PlayitManager:
         with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(log_message)
 
-    def __del__(self):
-        """Cleanup al destruir el objeto."""
-        try:
-            self.stop()
-        except:
-            pass
+

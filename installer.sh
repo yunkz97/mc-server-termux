@@ -415,8 +415,24 @@ download_binaries() {
         log_success "Filebrowser ya descargado"
     else
         log_step "Descargando Filebrowser..."
-        local fb_url="https://github.com/filebrowser/filebrowser/releases/latest/download/linux-arm64-filebrowser.tar.gz"
-
+        local fb_arch=""
+        case "$arch" in
+            aarch64|arm64)
+                fb_arch="arm64"
+                ;;
+            armv7l|armv8l)
+                fb_arch="armv7"
+                ;;
+            x86_64)
+                fb_arch="amd64"
+                ;;
+        esac
+        if [ -z "$fb_arch" ]; then
+            log_warning "Arquitectura no soportada para Filebrowser: $arch"
+            log_warning "Filebrowser puede no funcionar"
+            return 1
+        fi
+        local fb_url="https://github.com/filebrowser/filebrowser/releases/latest/download/linux-${fb_arch}-filebrowser.tar.gz"
         if wget -q --show-progress "$fb_url" -O fb.tar.gz 2>&1; then
             tar -xzf fb.tar.gz filebrowser 2>/dev/null
             rm fb.tar.gz

@@ -415,35 +415,57 @@ def get_local_ip() -> str:
     Returns:
         Dirección IP o fallback
     """
+    import re
+    import subprocess
+
+    # Método 1: ip route para determinar la interfaz por defecto
     try:
-        import subprocess
-
-        # Método 1: ip addr
         result = subprocess.run(
-            ["ip", "addr", "show", "wlan0"], capture_output=True, text=True, timeout=5
+            ["ip", "route", "get", "1.1.1.1"],
+            capture_output=True, text=True, timeout=5
         )
-
         if result.returncode == 0:
-            import re
-
-            match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout)
+            match = re.search(r"dev\s+(\S+)", result.stdout)
             if match:
-                return match.group(1)
+                iface = match.group(1)
+                result2 = subprocess.run(
+                    ["ip", "addr", "show", iface],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result2.returncode == 0:
+                    match2 = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result2.stdout)
+                    if match2:
+                        return match2.group(1)
+    except Exception:
+        pass
 
-        # Método 2: ifconfig
+    # Método 2: wildcard - buscar en todas las interfaces comunes
+    import os
+    for iface_dir in os.listdir("/sys/class/net"):
+        if iface_dir == "lo":
+            continue
+        try:
+            result = subprocess.run(
+                ["ip", "addr", "show", iface_dir],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0:
+                match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout)
+                if match:
+                    return match.group(1)
+        except Exception:
+            continue
+
+    # Método 3: ifconfig wildcard (legacy)
+    try:
         result = subprocess.run(
-            ["ifconfig", "wlan0"], capture_output=True, text=True, timeout=5
+            ["ifconfig"], capture_output=True, text=True, timeout=5
         )
-
         if result.returncode == 0:
-            import re
-
             match = re.search(r"inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)", result.stdout)
             if match:
                 return match.group(1)
-
-        # Fallback
-        return "192.168.X.X"
-
     except Exception:
-        return "192.168.X.X"
+        pass
+
+    return "192.168.X.X"

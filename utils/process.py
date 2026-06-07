@@ -143,7 +143,8 @@ class ProcessManager:
         pid_file: Path,
         log_file: Path,
         env: Optional[dict] = None,
-        cwd: Optional[Path] = None
+        cwd: Optional[Path] = None,
+        stdin_pipe: bool = False
     ) -> subprocess.Popen:
         """
         Inicia un proceso con manejo robusto.
@@ -154,6 +155,7 @@ class ProcessManager:
             log_file: Donde redirigir stdout/stderr
             env: Variables de entorno adicionales
             cwd: Directorio de trabajo
+            stdin_pipe: Si True, conecta stdin vía pipe (para enviar comandos)
 
         Returns:
             Objeto Popen del proceso iniciado
@@ -171,8 +173,10 @@ class ProcessManager:
         log_handle = open(log_file, 'a', buffering=1)
 
         # Iniciar proceso
+        stdin_target = subprocess.PIPE if stdin_pipe else subprocess.DEVNULL
         process = subprocess.Popen(
             command,
+            stdin=stdin_target,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             env=process_env,

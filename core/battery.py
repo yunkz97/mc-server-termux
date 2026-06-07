@@ -77,6 +77,7 @@ class BatteryMonitor:
 
         if self.thread:
             self.thread.join(timeout=5)
+            self.thread = None
 
         self.pid_file.unlink(missing_ok=True)
         self._log("Monitor de batería detenido")

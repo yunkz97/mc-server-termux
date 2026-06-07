@@ -16,6 +16,7 @@ from core.battery import BatteryMonitor
 from core.filebrowser import FilebrowserManager
 from core.minecraft import MinecraftServer
 from core.playit import PlayitManager
+from core.server_setup import accept_eula, download_paper, generate_server_properties
 from utils.logger import LogManager
 from utils.process import ProcessManager
 from utils.ui import *
@@ -644,13 +645,184 @@ class MCServerManager:
             {"JAVA_RAM": java_ram, "USE_AIKAR_FLAGS": use_aikar, "FIRST_RUN": False}
         )
 
-        # Subir JAR
+        # Obtener JAR del servidor
         print()
-        print_box("📁 SUBIR SERVIDOR JAR")
-        print()
-        log_info("Necesitas subir el archivo .jar de tu servidor")
+        print_box("📁 OBTENER SERVIDOR JAR")
         print()
 
+        # Verificar si ya hay JARs
+        existing_jars = list(self.settings.server_dir.glob("*.jar"))
+
+        if existing_jars:
+            log_info(f"JARs encontrados: {', '.join(j.name for j in existing_jars)}")
+            if prompt_yes_no("¿Deseas usar uno de estos?", default=True):
+                if len(existing_jars) == 1:
+                    server_jar = existing_jars[0].name
+                    log_success(f"JAR seleccionado: {server_jar}")
+                else:
+                    jar_options = [jar.name for jar in existing_jars]
+                    jar_choice = prompt_choice("Selecciona JAR:", jar_options)
+                    server_jar = jar_options[jar_choice]
+                    log_success(f"JAR seleccionado: {server_jar}")
+                self.settings.save({"SERVER_JAR": server_jar})
+            else:
+                if not self._download_or_upload_jar():
+                    return False
+        else:
+            log_info("No se encontraron JARs en el directorio del servidor")
+            print()
+            jar_source_options = [
+                "Descargar Paper automáticamente (recomendado)",
+                "Subir manualmente vía Filebrowser",
+            ]
+            jar_source = prompt_choice("¿Cómo deseas obtener el JAR?", jar_source_options, default=1)
+
+            if jar_source == 0:  # Auto descargar
+                if not self._auto_download_paper():
+                    return False
+            else:  # Subir manual
+                if not self._manual_upload_jar():
+                    return False
+
+        # Generar server.properties
+        log_step("Generando server.properties...")
+        generate_server_properties(
+            self.settings.server_dir,
+            port=self.settings.server_port,
+        )
+        log_success("server.properties generado")
+
+        # Aceptar EULA
+        log_step("Aceptando EULA...")
+        accept_eula(self.settings.server_dir)
+        log_success("EULA aceptado")
+
+        # Configurar Playit
+        print()
+        print_box("🌍 CONFIGURAR PLAYIT.GG")
+        print()
+        log_info("Configurando conexión externa...")
+
+        if self.playit.start():
+            if self.playit.claim_url:
+                print()
+                print(
+                    f"  Vincula en: {Colors.MAGENTA}{self.playit.claim_url}{Colors.RESET}"
+                )
+                print()
+                press_enter("Presiona Enter después de vincular")
+
+        # Resolver nombre del JAR para el resumen
+        server_jar = self.settings.server_jar
+
+        self.filebrowser.stop()
+
+        # Finalizar
+        print()
+        print_box("✅ CONFIGURACIÓN COMPLETADA")
+        print()
+        log_success("¡Tu servidor está listo!")
+        print()
+        print("Configuración guardada:")
+        print(f"  • RAM: {java_ram}")
+        print(f"  • Optimizado: {use_aikar}")
+        print(f"  • JAR: {server_jar}")
+        print()
+        press_enter()
+
+        return True
+
+    def _auto_download_paper(self) -> bool:
+        """Descarga Paper automáticamente desde la API oficial."""
+        print()
+        log_step("Obteniendo versiones de Paper...")
+
+        # Preguntar versión
+        version_options = [
+            "Latest (recomendado)",
+            "1.21.4",
+            "1.21.3",
+            "1.21.1",
+            "1.20.4",
+            "Personalizado",
+        ]
+        ver_choice = prompt_choice("Selecciona versión:", version_options, default=1)
+
+        version = "latest"
+        if ver_choice == 5:
+            version = prompt("Versión (ej: 1.21.4):", "1.21.4")
+
+        print()
+        log_step("Descargando Paper... (esto puede tomar unos minutos)")
+
+        # Mostrar progreso simple
+        import sys
+
+        def _progress_hook(block_num, block_size, total_size):
+            downloaded = block_num * block_size
+            if total_size > 0:
+                percent = min(100, int(100 * downloaded / total_size))
+                bar_len = 30
+                filled = int(bar_len * percent / 100)
+                bar = "█" * filled + "░" * (bar_len - filled)
+                print(
+                    f"\r  |{bar}| {percent}% ({downloaded // 1024 // 1024}MB/{total_size // 1024 // 1024}MB)",
+                    end="",
+                    flush=True,
+                )
+                if percent >= 100:
+                    print()
+
+        try:
+            import urllib.request
+            import json
+            import os
+
+            # Resolver versión
+            if version == "latest":
+                url = "https://api.papermc.io/v2/projects/paper"
+                with urllib.request.urlopen(url, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                    version = data["versions"][-1]
+                log_info(f"Versión más reciente: {version}")
+
+            # Resolver build
+            url = f"https://api.papermc.io/v2/projects/paper/versions/{version}"
+            with urllib.request.urlopen(url, timeout=15) as resp:
+                data = json.loads(resp.read())
+                build = str(data["builds"][-1])
+            log_info(f"Build: {build}")
+
+            # Descargar
+            filename = f"paper-{version}-{build}.jar"
+            download_url = (
+                f"https://api.papermc.io/v2/projects/paper/versions/{version}"
+                f"/builds/{build}/downloads/{filename}"
+            )
+
+            dest = self.settings.server_dir / filename
+            urllib.request.urlretrieve(download_url, str(dest), _progress_hook)
+            print()
+
+            # Crear symlink server.jar
+            server_jar_link = self.settings.server_dir / "server.jar"
+            if server_jar_link.exists() or server_jar_link.is_symlink():
+                server_jar_link.unlink()
+                server_jar_link.symlink_to(dest.name)
+
+            self.settings.save({"SERVER_JAR": filename})
+            log_success(f"Paper descargado: {filename}")
+            return True
+
+        except Exception as e:
+            print()
+            log_error(f"Error descargando Paper: {e}")
+            log_info("Puedes subir el JAR manualmente vía Filebrowser")
+            return False
+
+    def _manual_upload_jar(self) -> bool:
+        """Abre Filebrowser para subir el JAR manualmente."""
+        print()
         log_step("Iniciando Filebrowser...")
         if not self.filebrowser.start():
             log_error("Error iniciando Filebrowser")
@@ -667,7 +839,6 @@ class MCServerManager:
         print("     (Vanilla, Fabric, Paper, etc.)")
         print("  4. Cuando termines, vuelve aquí")
         print()
-
         press_enter("Presiona Enter cuando hayas subido el JAR")
 
         # Buscar JARs
@@ -689,38 +860,19 @@ class MCServerManager:
             log_success(f"JAR seleccionado: {server_jar}")
 
         self.settings.save({"SERVER_JAR": server_jar})
-
-        # Configurar Playit
-        print()
-        print_box("🌍 CONFIGURAR PLAYIT.GG")
-        print()
-        log_info("Configurando conexión externa...")
-
-        if self.playit.start():
-            if self.playit.claim_url:
-                print()
-                print(
-                    f"  Vincula en: {Colors.MAGENTA}{self.playit.claim_url}{Colors.RESET}"
-                )
-                print()
-                press_enter("Presiona Enter después de vincular")
-
-        self.filebrowser.stop()
-
-        # Finalizar
-        print()
-        print_box("✅ CONFIGURACIÓN COMPLETADA")
-        print()
-        log_success("¡Tu servidor está listo!")
-        print()
-        print("Configuración guardada:")
-        print(f"  • RAM: {java_ram}")
-        print(f"  • Optimizado: {use_aikar}")
-        print(f"  • JAR: {server_jar}")
-        print()
-        press_enter()
-
         return True
+
+    def _download_or_upload_jar(self) -> bool:
+        """Preguntar si descargar Paper o subir manualmente."""
+        jar_source_options = [
+            "Descargar Paper automáticamente",
+            "Subir manualmente vía Filebrowser",
+        ]
+        choice = prompt_choice("¿Cómo deseas obtener el JAR?", jar_source_options, default=1)
+        if choice == 0:
+            return self._auto_download_paper()
+        else:
+            return self._manual_upload_jar()
 
     def exit_program(self):
         """Sale del programa."""

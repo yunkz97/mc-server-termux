@@ -825,7 +825,11 @@ class MCServerManager:
         print()
         log_step("Iniciando Filebrowser...")
         if not self.filebrowser.start():
-            log_error("Error iniciando Filebrowser")
+            error_detail = self.filebrowser.last_error
+            if error_detail:
+                log_error(f"Error iniciando Filebrowser: {error_detail}")
+            else:
+                log_error("Error iniciando Filebrowser")
             return False
 
         self._show_filebrowser_info()

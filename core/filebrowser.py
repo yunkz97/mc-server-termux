@@ -27,6 +27,7 @@ class FilebrowserManager:
         self.pid_file = settings.run_dir / "filebrowser.pid"
 
         self.process: Optional[subprocess.Popen] = None
+        self.last_error: str = ""
 
         # Generar contraseña si no existe
         if not self.settings.filebrowser_password:
@@ -39,17 +40,23 @@ class FilebrowserManager:
         Returns:
             True si inició correctamente
         """
+        self.last_error = ""
+
         if self.is_running():
             self._log("Filebrowser ya está corriendo")
             return True
 
         if not self.binary.exists():
-            self._log(f"ERROR: Filebrowser binary no encontrado: {self.binary}")
+            self.last_error = f"Binary not found: {self.binary}"
+            self._log(f"ERROR: {self.last_error}")
             return False
 
         # Configurar si es primera vez
         if not self.db_file.exists():
             if not self._setup_filebrowser():
+                # _setup_filebrowser already set self.last_error
+                if not self.last_error:
+                    self.last_error = "Setup failed (see log for details)"
                 return False
 
         self._log("Iniciando Filebrowser...")
@@ -77,14 +84,17 @@ class FilebrowserManager:
                 return True
             else:
                 # Leer log para dar más información del error
+                error_detail = ""
                 if self.log_file.exists():
                     log_content = self.log_file.read_text()
                     if log_content.strip():
-                        self._log(f"Filebrowser log:\n{log_content}")
-                self._log("Filebrowser no inició en el tiempo esperado")
+                        error_detail = log_content.strip()
+                        self._log(f"Filebrowser log:\n{error_detail}")
+                self.last_error = f"Filebrowser did not start within 10s. {error_detail}"
                 return False
 
         except Exception as e:
+            self.last_error = str(e)
             self._log(f"ERROR iniciando Filebrowser: {e}")
             return False
 
@@ -151,7 +161,8 @@ class FilebrowserManager:
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
-                self._log(f"ERROR config init: {result.stderr.strip() or result.stdout.strip()}")
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config init failed"
+                self._log(f"ERROR config init: {self.last_error}")
                 return False
 
             # Configurar puerto y root
@@ -172,7 +183,8 @@ class FilebrowserManager:
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
-                self._log(f"ERROR config set: {result.stderr.strip() or result.stdout.strip()}")
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config set failed"
+                self._log(f"ERROR config set: {self.last_error}")
                 return False
 
             # Agregar usuario
@@ -197,7 +209,8 @@ class FilebrowserManager:
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
-                self._log(f"ERROR users add: {result.stderr.strip() or result.stdout.strip()}")
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "users add failed"
+                self._log(f"ERROR users add: {self.last_error}")
                 return False
 
             self._log("Filebrowser configurado correctamente")

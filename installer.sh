@@ -263,10 +263,12 @@ verify_python() {
     local py_version=$(python --version 2>&1 | awk '{print $2}')
     log_success "Python $py_version detectado"
 
-    # Verificar pip
+    # Verificar pip (en Termux viene con el paquete python-pip)
     if ! python -m pip --version &> /dev/null; then
         log_step "Instalando pip..."
-        python -m ensurepip --upgrade 2>&1 | grep -v "^$"
+        python -m ensurepip --upgrade 2>&1 | grep -v "^$" || {
+            log_warning "pip no disponible — intenta: pkg install python-pip"
+        }
     fi
 
     log_success "Pip disponible"
@@ -354,7 +356,7 @@ install_python_deps() {
     local log_file="$HOME/.mc-installer-pip.log"
 
     {
-        python -m pip install --upgrade pip
+        # Nota: NO upgradear pip en Termux — el pkg lo gestiona
         python -m pip install -r requirements.txt
     } > "$log_file" 2>&1 &
 

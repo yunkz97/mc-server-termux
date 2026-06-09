@@ -29,10 +29,6 @@ class FilebrowserManager:
         self.process: Optional[subprocess.Popen] = None
         self.last_error: str = ""
 
-        # Generar contraseña si no existe
-        if not self.settings.filebrowser_password:
-            self._generate_credentials()
-
     def start(self) -> bool:
         """
         Inicia Filebrowser.
@@ -286,6 +282,101 @@ class FilebrowserManager:
             "user": self.settings.filebrowser_user,
             "pid": self.pm.get_pid(self.pid_file),
         }
+
+    def manual_setup(self, username: str, password: str) -> bool:
+        """
+        Configura Filebrowser manualmente con un usuario y contraseña específicos.
+        """
+        try:
+            self._log(f"Iniciando configuración manual para usuario: {username}")
+
+            # 1. Inicializar DB
+            result = subprocess.run(
+                [str(self.binary), "config", "init", "--database", str(self.db_file)],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config init failed"
+                return False
+
+            # 2. Configurar puerto y root
+            result = subprocess.run(
+                [
+                    str(self.binary),
+                    "config",
+                    "set",
+                    "--port", str(self.settings.filebrowser_port),
+                    "--address", "0.0.0.0",
+                    "--root", str(self.settings.server_dir),
+                    "--database", str(self.db_file),
+                ],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config set failed"
+                return False
+
+            # 3. Intentar agregar usuario
+            result = subprocess.run(
+                [
+                    str(self.binary),
+                    "users",
+                    "add",
+                    username,
+                    password,
+                    "--perm.admin",
+                    "--perm.execute",
+                    "--perm.create",
+                    "--perm.rename",
+                    "--perm.modify",
+                    "--perm.delete",
+                    "--perm.share",
+                    "--perm.download",
+                    "--database",
+                    str(self.db_file),
+                ],
+                capture_output=True, text=True,
+            )
+
+            if result.returncode != 0:
+                add_output = result.stderr.strip() or result.stdout.strip()
+                if "already exists" in add_output.lower() or "duplicate" in add_output.lower():
+                    # Actualizar si ya existe
+                    result = subprocess.run(
+                        [
+                            str(self.binary),
+                            "users",
+                            "update",
+                            username,
+                            "--password",
+                            password,
+                            "--database",
+                            str(self.db_file),
+                        ],
+                        capture_output=True, text=True,
+                    )
+                    if result.returncode != 0:
+                        self.last_error = result.stderr.strip() or result.stdout.strip() or "users update failed"
+                        return False
+                else:
+                    self.last_error = add_output or "users add failed"
+                    return False
+
+            # Guardar en settings para que el script lo recuerde
+            self.settings.save({
+                "FILEBROWSER_USER": username,
+                "FILEBROWSER_PASSWORD": password
+            })
+            self.settings.filebrowser_user = username
+            self.settings.filebrowser_password = password
+
+            self._log(f"Configuración manual completada con éxito para {username}")
+            return True
+
+        except Exception as e:
+            self.last_error = str(e)
+            self._log(f"ERROR en manual_setup: {e}")
+            return False
 
     def _log(self, message: str):
         """Escribe al log."""

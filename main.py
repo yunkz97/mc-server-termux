@@ -117,9 +117,10 @@ class MCServerManager:
         print(f"{Colors.BOLD}SERVICIOS{Colors.RESET}")
         print(f"  {Colors.GREEN}[7]{Colors.RESET}  ▶  Iniciar Playit")
         print(f"  {Colors.RED}[8]{Colors.RESET}  ■  Detener Playit")
-        print(f"  {Colors.GREEN}[9]{Colors.RESET}  ▶  Iniciar Filebrowser")
+        print(f"  {Colors.GREEN}[9]{Colors.RESET}  ▶   Iniciar Filebrowser")
         print(f"  {Colors.RED}[10]{Colors.RESET} ■  Detener Filebrowser")
         print(f"  {Colors.YELLOW}[11]{Colors.RESET} 🔧 Resetear Filebrowser")
+        print(f"  {Colors.BLUE}[20]{Colors.RESET} 🔑 Configuración Manual FB")
         print()
 
         # Monitor
@@ -232,6 +233,7 @@ class MCServerManager:
             "17": self.show_configuration,
             "18": lambda: None,  # Solo refresh
             "19": self.update_system,
+            "20": self.manual_filebrowser_setup,
         }
 
         handler = handlers.get(choice)
@@ -413,6 +415,43 @@ class MCServerManager:
             print(f"  Contraseña: {Colors.YELLOW}{creds['password']}{Colors.RESET}")
         else:
             log_error("Error reconfigurando Filebrowser")
+
+    def manual_filebrowser_setup(self):
+        """
+         Permite al usuario configurar manualmente las credenciales de Filebrowser.
+        """
+        print_header("🔑 CONFIGURACIÓN MANUAL FILEBROWSER")
+        print()
+        
+        if self.filebrowser.is_running():
+            log_warning("Deteniendo Filebrowser para configurar...")
+            self.filebrowser.stop()
+
+        user = prompt("Introduce el nombre de usuario")
+        if not user:
+            log_error("El usuario no puede estar vacío")
+            return
+
+        pwd = prompt("Introduce la contraseña")
+        if not pwd:
+            log_error("La contraseña no puede estar vacía")
+            return
+
+        pwd_confirm = prompt("Confirma la contraseña")
+        if pwd != pwd_confirm:
+            log_error("Las contraseñas no coinciden")
+            return
+
+        log_step(f"Configurando usuario {user}...")
+        if self.filebrowser.manual_setup(user, pwd):
+            log_success("¡Filebrowser configurado con éxito!")
+            print()
+            print(f"  👤 Usuario:    {Colors.YELLOW}{user}{Colors.RESET}")
+            print(f"  🔑 Contraseña: {Colors.YELLOW}{pwd}{Colors.RESET}")
+        else:
+            log_error(f"Error al configurar: {self.filebrowser.last_error}")
+
+        print()
 
     def _show_filebrowser_info(self):
         """Muestra información de acceso a Filebrowser."""

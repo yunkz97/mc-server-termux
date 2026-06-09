@@ -100,6 +100,14 @@ class PlayitManager:
                 # Verificar que el proceso sigue vivo
                 if self.process.poll() is not None:
                     self.state = PlayitState.ERROR
+                    # Leer stdout restante para saber por qué murió
+                    try:
+                        remaining = self.process.stdout.read() if self.process.stdout else ""
+                        if remaining:
+                            self._log(f"Playit output:\n{remaining}")
+                            self.log_file.write_text(remaining)
+                    except:
+                        pass
                     self._log("El proceso terminó inesperadamente")
                     return False
 

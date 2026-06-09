@@ -72,7 +72,13 @@ class Settings:
     def _get_env(self, key: str, default: str = "") -> str:
         """Obtiene variable de entorno de forma segura."""
         value = os.getenv(key, default).strip()
-        return value if value else default
+        if not value:
+            return default
+        # Expandir ~ y variables de entorno ($HOME, etc.)
+        # python-dotenv NO expande $VAR por defecto, hay que hacerlo a mano
+        value = os.path.expanduser(value)
+        value = os.path.expandvars(value)
+        return value
 
     def _get_int(self, key: str, default: int) -> int:
         """Obtiene variable como entero con fallback."""

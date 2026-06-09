@@ -72,8 +72,7 @@ class Settings:
     def _get_env(self, key: str, default: str = "") -> str:
         """Obtiene variable de entorno de forma segura."""
         value = os.getenv(key, default).strip()
-        # Expandir variables de entorno dentro del valor
-        return os.path.expandvars(value) if value else default
+        return value if value else default
 
     def _get_int(self, key: str, default: int) -> int:
         """Obtiene variable como entero con fallback."""

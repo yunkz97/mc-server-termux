@@ -197,37 +197,12 @@ class FilebrowserManager:
             return False
 
     def _generate_credentials(self):
-        """Genera credenciales aleatorias pero legibles."""
-        adjectives = [
-            "Super",
-            "Mega",
-            "Epic",
-            "Fast",
-            "Cool",
-            "Iron",
-            "Gold",
-            "Blue",
-            "Dark",
-            "Neon",
-        ]
-        nouns = [
-            "Creeper",
-            "Dragon",
-            "Steve",
-            "Sword",
-            "Block",
-            "Mine",
-            "Craft",
-            "Server",
-            "Player",
-            "World",
-        ]
-
-        adj = random.choice(adjectives)
-        noun = random.choice(nouns)
-        num = random.randint(100, 999)
-
-        password = f"{adj}{noun}{num}!MC"
+        """Genera credenciales aleatorias seguras (mínimo 12 caracteres)."""
+        # Generar una contraseña segura: 16 chars alfanuméricos
+        # Sin caracteres especiales para evitar problemas de parsing
+        # en shell, .env, o validación de filebrowser
+        alphabet = string.ascii_letters + string.digits
+        password = "".join(random.choices(alphabet, k=16))
 
         # Guardar en settings
         self.settings.save({"FILEBROWSER_PASSWORD": password})

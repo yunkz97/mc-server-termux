@@ -286,20 +286,34 @@ class FilebrowserManager:
     def manual_setup(self, username: str, password: str) -> bool:
         """
         Configura Filebrowser manualmente con un usuario y contraseña específicos.
+        Elimina la DB anterior para garantizar un estado limpio.
         """
         try:
             self._log(f"Iniciando configuración manual para usuario: {username}")
 
-            # 1. Inicializar DB
+            # 0. Detener Filebrowser si está corriendo
+            if self.is_running():
+                self._log("Deteniendo Filebrowser antes de reconfigurar...")
+                self.stop()
+                import time
+                time.sleep(1)
+
+            # 1. Eliminar DB anterior (nuclear reset)
+            if self.db_file.exists():
+                self._log("Eliminando base de datos anterior...")
+                self.db_file.unlink()
+
+            # 2. Inicializar DB fresca
             result = subprocess.run(
                 [str(self.binary), "config", "init", "--database", str(self.db_file)],
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
                 self.last_error = result.stderr.strip() or result.stdout.strip() or "config init failed"
+                self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # 2. Configurar puerto y root
+            # 3. Configurar puerto y root
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -314,9 +328,10 @@ class FilebrowserManager:
             )
             if result.returncode != 0:
                 self.last_error = result.stderr.strip() or result.stdout.strip() or "config set failed"
+                self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # 3. Intentar agregar usuario
+            # 4. Agregar usuario (DB fresca, no debería fallar)
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -339,30 +354,11 @@ class FilebrowserManager:
             )
 
             if result.returncode != 0:
-                add_output = result.stderr.strip() or result.stdout.strip()
-                if "already exists" in add_output.lower() or "duplicate" in add_output.lower():
-                    # Actualizar si ya existe
-                    result = subprocess.run(
-                        [
-                            str(self.binary),
-                            "users",
-                            "update",
-                            username,
-                            "--password",
-                            password,
-                            "--database",
-                            str(self.db_file),
-                        ],
-                        capture_output=True, text=True,
-                    )
-                    if result.returncode != 0:
-                        self.last_error = result.stderr.strip() or result.stdout.strip() or "users update failed"
-                        return False
-                else:
-                    self.last_error = add_output or "users add failed"
-                    return False
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "users add failed"
+                self._log(f"ERROR users add: {self.last_error}")
+                return False
 
-            # Guardar en settings para que el script lo recuerde
+            # 5. Guardar en settings
             self.settings.save({
                 "FILEBROWSER_USER": username,
                 "FILEBROWSER_PASSWORD": password

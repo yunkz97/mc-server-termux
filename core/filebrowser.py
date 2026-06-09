@@ -164,7 +164,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # Configurar puerto y root
+            # Configurar puerto, root y auth noauth
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -176,6 +176,7 @@ class FilebrowserManager:
                     "0.0.0.0",
                     "--root",
                     str(self.settings.server_dir),
+                    "--auth.method", "noauth",
                     "--database",
                     str(self.db_file),
                 ],
@@ -186,14 +187,14 @@ class FilebrowserManager:
                 self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # Intentar agregar usuario
+            # Intentar agregar usuario (no crítico con noauth)
             result = subprocess.run(
                 [
                     str(self.binary),
                     "users",
                     "add",
-                    self.settings.filebrowser_user,
-                    self.settings.filebrowser_password,
+                    self.settings.filebrowser_user or "admin",
+                    self.settings.filebrowser_password or "admin12345678",
                     "--perm.admin",
                     "--perm.execute",
                     "--perm.create",
@@ -207,35 +208,11 @@ class FilebrowserManager:
                 ],
                 capture_output=True, text=True,
             )
-
             if result.returncode != 0:
-                # Si el usuario ya existe, actualizar contraseña
-                add_output = result.stderr.strip() or result.stdout.strip()
-                if "already exists" in add_output.lower() or "duplicate" in add_output.lower():
-                    self._log("Usuario ya existe, actualizando contraseña...")
-                    result = subprocess.run(
-                        [
-                            str(self.binary),
-                            "users",
-                            "update",
-                            self.settings.filebrowser_user,
-                            "--password",
-                            self.settings.filebrowser_password,
-                            "--database",
-                            str(self.db_file),
-                        ],
-                        capture_output=True, text=True,
-                    )
-                    if result.returncode != 0:
-                        self.last_error = result.stderr.strip() or result.stdout.strip() or "users update failed"
-                        self._log(f"ERROR users update: {self.last_error}")
-                        return False
-                else:
-                    self.last_error = add_output or "users add failed"
-                    self._log(f"ERROR users add: {self.last_error}")
-                    return False
+                add_out = result.stderr.strip() or result.stdout.strip() or "users add failed"
+                self._log(f"users add (no crítico con noauth): {add_out}")
 
-            self._log("Filebrowser configurado correctamente")
+            self._log("Filebrowser configurado correctamente (auth: noauth)")
             return True
 
         except Exception as e:
@@ -313,7 +290,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # 3. Configurar puerto y root
+            # 3. Configurar puerto, root y auth noauth (sin contraseña)
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -322,6 +299,7 @@ class FilebrowserManager:
                     "--port", str(self.settings.filebrowser_port),
                     "--address", "0.0.0.0",
                     "--root", str(self.settings.server_dir),
+                    "--auth.method", "noauth",
                     "--database", str(self.db_file),
                 ],
                 capture_output=True, text=True,
@@ -331,7 +309,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # 4. Agregar usuario (DB fresca, no debería fallar)
+            # 4. Agregar usuario (opcional con noauth, no falla si falla)
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -352,11 +330,9 @@ class FilebrowserManager:
                 ],
                 capture_output=True, text=True,
             )
-
             if result.returncode != 0:
-                self.last_error = result.stderr.strip() or result.stdout.strip() or "users add failed"
-                self._log(f"ERROR users add: {self.last_error}")
-                return False
+                add_out = result.stderr.strip() or result.stdout.strip() or "users add failed"
+                self._log(f"users add (no crítico con noauth): {add_out}")
 
             # 5. Guardar en settings
             self.settings.save({

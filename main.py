@@ -728,22 +728,11 @@ class MCServerManager:
                 if not self._auto_download_paper():
                     return False
             else:  # Subir manual vía Filebrowser
-                # Pedir credenciales antes de intentar iniciar
+                # Asegurar que Filebrowser tenga configuración mínima
                 if not self.settings.filebrowser_password:
-                    log_info("Filebrowser necesita credenciales para iniciar")
-                    print()
-                    fb_user = prompt("Nombre de usuario para Filebrowser", "admin")
-                    fb_pwd = None
-                    while True:
-                        fb_pwd = prompt("Contraseña (mínimo 12 caracteres)")
-                        if len(fb_pwd) >= 12:
-                            break
-                        log_error("La contraseña debe tener al menos 12 caracteres")
-                    if not self.filebrowser.manual_setup(fb_user, fb_pwd):
+                    if not self.filebrowser.manual_setup("admin", "admin12345678"):
                         log_error(f"Error configurando Filebrowser: {self.filebrowser.last_error}")
                         return False
-                    log_success("Credenciales configuradas")
-                    print()
                 if not self._manual_upload_jar():
                     return False
 

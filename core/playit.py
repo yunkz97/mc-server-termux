@@ -88,8 +88,13 @@ class PlayitManager:
             # Determinar el runner: termux-chroot si está disponible, si no directo
             runner = self._get_proot_runner()
 
-            # Iniciador del proceso
-            cmd = runner + [str(self.binary)]
+            # Asegurar que el directorio de config existe
+            playit_config_dir = Path.home() / ".config" / "playit_gg"
+            playit_config_dir.mkdir(parents=True, exist_ok=True)
+
+            # Iniciador del proceso con socket-path explícito (necesario en Termux)
+            socket_path = str(playit_config_dir / "playit.sock")
+            cmd = runner + [str(self.binary), "--socket-path", socket_path]
 
             self.process = subprocess.Popen(
                 cmd,

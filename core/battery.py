@@ -30,7 +30,12 @@ class BatteryMonitor:
         self.thread: Optional[threading.Thread] = None
 
         # Estado de alertas
-        self.alert_state = {"alert_20": False, "alert_10": False, "alert_5": False}
+        self.alert_state = {
+            "alert_20": False,
+            "alert_10": False,
+            "alert_5": False,
+            "shutdown_triggered": False,
+        }
 
         self._load_state()
 
@@ -115,6 +120,9 @@ class BatteryMonitor:
             # Verificar y enviar alertas
             self._check_and_alert(level)
 
+            # Verificar si hay que apagar el servidor
+            self._check_shutdown(level)
+
     def _check_and_alert(self, level: int):
         """
         Verifica el nivel de batería y envía alertas si es necesario.
@@ -154,6 +162,47 @@ class BatteryMonitor:
             self.alert_state["alert_5"] = True
             self._save_state()
 
+    def _check_shutdown(self, level: int):
+        """
+        Verifica si se debe apagar el servidor por batería crítica.
+
+        Args:
+            level: Nivel de batería actual
+        """
+        if not self.settings.battery_auto_shutdown:
+            return
+
+        if self.alert_state["shutdown_triggered"]:
+            return
+
+        if level > self.settings.battery_shutdown_threshold:
+            return
+
+        self._log(
+            f"Batería crítica ({level}%) — iniciando apagado del servidor..."
+        )
+
+        # Anunciar a los jugadores con cuenta regresiva
+        self.minecraft.send_command(
+            f"say §4§l⚠ Batería crítica ({level}%) — Apagando servidor en 10 segundos..."
+        )
+        time.sleep(5)
+
+        self.minecraft.send_command(
+            f"say §4§l⚠ Apagando en 5 segundos... Guarden su progreso."
+        )
+        time.sleep(5)
+
+        # Apagar servidor gracefulmente
+        self._log("Enviando comando 'stop' al servidor Minecraft")
+        self.minecraft.send_command("stop")
+
+        # Marcar como ejecutado para no repetir
+        self.alert_state["shutdown_triggered"] = True
+        self._save_state()
+
+        self._log("Servidor apagado por batería crítica")
+
     def _send_alert(self, level: int, message_template: str):
         """
         Envía alerta al servidor Minecraft.
@@ -172,7 +221,12 @@ class BatteryMonitor:
 
     def _reset_alerts(self):
         """Resetea todas las alertas."""
-        self.alert_state = {"alert_20": False, "alert_10": False, "alert_5": False}
+        self.alert_state = {
+            "alert_20": False,
+            "alert_10": False,
+            "alert_5": False,
+            "shutdown_triggered": False,
+        }
         self._save_state()
         self._log("Alertas reseteadas (dispositivo cargando)")
 
@@ -227,6 +281,8 @@ class BatteryMonitor:
             "battery_info": battery_info,
             "alert_state": self.alert_state.copy(),
             "interval": self.settings.battery_check_interval,
+            "auto_shutdown": self.settings.battery_auto_shutdown,
+            "shutdown_threshold": self.settings.battery_shutdown_threshold,
         }
 
     def _save_state(self):
@@ -239,7 +295,12 @@ class BatteryMonitor:
         if self.state_file.exists():
             try:
                 with open(self.state_file, "r") as f:
-                    self.alert_state = json.load(f)
+                    loaded = json.load(f)
+                # Asegurar que las claves nuevas existan (backward compat)
+                for key in ("alert_20", "alert_10", "alert_5", "shutdown_triggered"):
+                    if key not in loaded:
+                        loaded[key] = False
+                self.alert_state = loaded
             except Exception:
                 pass
 

@@ -48,6 +48,8 @@ class Settings:
         self.battery_alert_20 = self._get_bool("BATTERY_ALERT_20", True)
         self.battery_alert_10 = self._get_bool("BATTERY_ALERT_10", True)
         self.battery_alert_5 = self._get_bool("BATTERY_ALERT_5", True)
+        self.battery_auto_shutdown = self._get_bool("BATTERY_AUTO_SHUTDOWN", True)
+        self.battery_shutdown_threshold = self._get_int("BATTERY_SHUTDOWN_THRESHOLD", 5)
 
         # Sistema
         self.log_level = self._get_env("LOG_LEVEL", "INFO")
@@ -188,6 +190,10 @@ class Settings:
             errors.append(f"BATTERY_CHECK_INTERVAL muy bajo: {self.battery_check_interval}s (mínimo 10s)")
         if self.playit_health_check_interval < 15:
             errors.append(f"PLAYIT_HEALTH_CHECK_INTERVAL muy bajo: {self.playit_health_check_interval}s (mínimo 15s)")
+
+        # Validar umbral de apagado
+        if not (1 <= self.battery_shutdown_threshold <= 50):
+            errors.append(f"BATTERY_SHUTDOWN_THRESHOLD fuera de rango: {self.battery_shutdown_threshold}% (debe ser 1-50)")
 
         # Validar log level
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]

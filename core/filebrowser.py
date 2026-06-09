@@ -154,9 +154,9 @@ class FilebrowserManager:
         try:
             self._log("Configurando Filebrowser...")
 
-            # Inicializar base de datos (idempotente)
+            # Inicializar base de datos con noauth desde el inicio
             result = subprocess.run(
-                [str(self.binary), "config", "init", "--database", str(self.db_file)],
+                [str(self.binary), "config", "init", "--database", str(self.db_file), "--auth.method", "noauth"],
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
@@ -164,7 +164,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # Configurar puerto, root y auth noauth
+            # Configurar puerto y root
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -176,7 +176,6 @@ class FilebrowserManager:
                     "0.0.0.0",
                     "--root",
                     str(self.settings.server_dir),
-                    "--auth.method", "noauth",
                     "--database",
                     str(self.db_file),
                 ],
@@ -280,9 +279,9 @@ class FilebrowserManager:
                 self._log("Eliminando base de datos anterior...")
                 self.db_file.unlink()
 
-            # 2. Inicializar DB fresca
+            # 2. Inicializar DB fresca con noauth desde el inicio
             result = subprocess.run(
-                [str(self.binary), "config", "init", "--database", str(self.db_file)],
+                [str(self.binary), "config", "init", "--database", str(self.db_file), "--auth.method", "noauth"],
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
@@ -290,7 +289,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # 3. Configurar puerto, root y auth noauth (sin contraseña)
+            # 3. Configurar puerto y root
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -299,7 +298,6 @@ class FilebrowserManager:
                     "--port", str(self.settings.filebrowser_port),
                     "--address", "0.0.0.0",
                     "--root", str(self.settings.server_dir),
-                    "--auth.method", "noauth",
                     "--database", str(self.db_file),
                 ],
                 capture_output=True, text=True,

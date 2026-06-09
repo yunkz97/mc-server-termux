@@ -149,13 +149,16 @@ class FilebrowserManager:
         """
         Configura Filebrowser inicialmente.
 
+        Si la DB ya existe, actualiza la contraseña del usuario
+        en lugar de fallar.
+
         Returns:
             True si se configuró correctamente
         """
         try:
             self._log("Configurando Filebrowser...")
 
-            # Inicializar base de datos
+            # Inicializar base de datos (idempotente)
             result = subprocess.run(
                 [str(self.binary), "config", "init", "--database", str(self.db_file)],
                 capture_output=True, text=True,
@@ -187,7 +190,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # Agregar usuario
+            # Intentar agregar usuario
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -208,10 +211,33 @@ class FilebrowserManager:
                 ],
                 capture_output=True, text=True,
             )
+
             if result.returncode != 0:
-                self.last_error = result.stderr.strip() or result.stdout.strip() or "users add failed"
-                self._log(f"ERROR users add: {self.last_error}")
-                return False
+                # Si el usuario ya existe, actualizar contraseña
+                add_output = result.stderr.strip() or result.stdout.strip()
+                if "already exists" in add_output.lower() or "duplicate" in add_output.lower():
+                    self._log("Usuario ya existe, actualizando contraseña...")
+                    result = subprocess.run(
+                        [
+                            str(self.binary),
+                            "users",
+                            "update",
+                            self.settings.filebrowser_user,
+                            "--password",
+                            self.settings.filebrowser_password,
+                            "--database",
+                            str(self.db_file),
+                        ],
+                        capture_output=True, text=True,
+                    )
+                    if result.returncode != 0:
+                        self.last_error = result.stderr.strip() or result.stdout.strip() or "users update failed"
+                        self._log(f"ERROR users update: {self.last_error}")
+                        return False
+                else:
+                    self.last_error = add_output or "users add failed"
+                    self._log(f"ERROR users add: {self.last_error}")
+                    return False
 
             self._log("Filebrowser configurado correctamente")
             return True

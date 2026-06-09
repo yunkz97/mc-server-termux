@@ -427,29 +427,37 @@ class MCServerManager:
             log_warning("Deteniendo Filebrowser para configurar...")
             self.filebrowser.stop()
 
-        user = prompt("Introduce el nombre de usuario")
-        if not user:
-            log_error("El usuario no puede estar vacío")
-            return
+        while True:
+            user = prompt("Introduce el nombre de usuario")
+            if not user:
+                log_error("El usuario no puede estar vacío")
+                continue
 
-        pwd = prompt("Introduce la contraseña")
-        if not pwd:
-            log_error("La contraseña no puede estar vacía")
-            return
+            pwd = prompt("Introduce la contraseña")
+            if not pwd:
+                log_error("La contraseña no puede estar vacía")
+                continue
+            
+            if len(pwd) < 12:
+                log_error("La contraseña es demasiado corta. Debe tener al menos 12 caracteres.")
+                continue
 
-        pwd_confirm = prompt("Confirma la contraseña")
-        if pwd != pwd_confirm:
-            log_error("Las contraseñas no coinciden")
-            return
+            pwd_confirm = prompt("Confirma la contraseña")
+            if pwd != pwd_confirm:
+                log_error("Las contraseñas no coinciden")
+                continue
 
-        log_step(f"Configurando usuario {user}...")
-        if self.filebrowser.manual_setup(user, pwd):
-            log_success("¡Filebrowser configurado con éxito!")
-            print()
-            print(f"  👤 Usuario:    {Colors.YELLOW}{user}{Colors.RESET}")
-            print(f"  🔑 Contraseña: {Colors.YELLOW}{pwd}{Colors.RESET}")
-        else:
-            log_error(f"Error al configurar: {self.filebrowser.last_error}")
+            log_step(f"Configurando usuario {user}...")
+            if self.filebrowser.manual_setup(user, pwd):
+                log_success("¡Filebrowser configurado con éxito!")
+                print()
+                print(f"  👤 Usuario:    {Colors.YELLOW}{user}{Colors.RESET}")
+                print(f"  🔑 Contraseña: {Colors.YELLOW}{pwd}{Colors.RESET}")
+                break
+            else:
+                log_error(f"Error al configurar: {self.filebrowser.last_error}")
+                if not prompt_yes_no("¿Intentar de nuevo?", default=True):
+                    break
 
         print()
 
@@ -863,16 +871,19 @@ class MCServerManager:
         """Abre Filebrowser para subir el JAR manualmente."""
         print()
         log_step("Iniciando Filebrowser...")
-        if not self.filebrowser.start():
-            error_detail = self.filebrowser.last_error
-            if error_detail:
-                log_error(f"Error iniciando Filebrowser: {error_detail}")
-            else:
-                log_error("Error iniciando Filebrowser")
+        try:
+            if not self.filebrowser.start():
+                error_detail = self.filebrowser.last_error
+                if error_detail:
+                    log_error(f"Error iniciando Filebrowser: {error_detail}")
+                else:
+                    log_error("Error iniciando Filebrowser")
+                return False
+        except Exception as e:
+            log_error(f"Fallo crítico al iniciar Filebrowser: {e}")
             return False
 
         self._show_filebrowser_info()
-
         print()
         print_box("📋 INSTRUCCIONES")
         print()
@@ -892,17 +903,17 @@ class MCServerManager:
             log_error("No se encontró ningún JAR")
             log_info(f"Sube el archivo a: {self.settings.server_dir}")
             return False
-
+        
         if len(jars) == 1:
             server_jar = jars[0].name
             log_success(f"JAR detectado: {server_jar}")
         else:
-            jar_options = [jar.name for jar in jars]
-            jar_choice = prompt_choice("Múltiples JARs encontrados:", jar_options)
-            server_jar = jar_options[jar_choice]
-            log_success(f"JAR seleccionado: {server_jar}")
+            jars_sorted = sorted(jars, key=lambda x: x.stat().st_mtime, reverse=True)
+            server_jar = jars_sorted[0].name
+            log_success(f"Múltiples JARs detectados. Usando el más reciente: {server_jar}")
 
         self.settings.save({"SERVER_JAR": server_jar})
+        return True
         return True
 
     def _download_or_upload_jar(self) -> bool:

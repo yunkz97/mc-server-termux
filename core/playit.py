@@ -51,12 +51,12 @@ class PlayitManager:
         # Cargar estado persistente si existe
         self._load_state()
 
-    def start(self, timeout: int = 120) -> bool:
+    def start(self, timeout: int = 300) -> bool:
         """
         Inicia el túnel Playit.gg con detección robusta.
 
         Args:
-            timeout: Tiempo máximo de espera en segundos
+            timeout: Tiempo máximo de espera en segundos (default 300 = 5 min)
 
         Returns:
             True si inició correctamente

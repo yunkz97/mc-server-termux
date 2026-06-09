@@ -418,6 +418,20 @@ def get_local_ip() -> str:
     import re
     import subprocess
 
+    # Método 0: hostname -I (funciona en Termux sin acceder a /sys)
+    try:
+        result = subprocess.run(
+            ["hostname", "-I"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            ips = result.stdout.strip().split()
+            for ip in ips:
+                if ip and not ip.startswith("127."):
+                    return ip
+    except Exception:
+        pass
+
     # Método 1: ip route para determinar la interfaz por defecto
     try:
         result = subprocess.run(
@@ -439,22 +453,26 @@ def get_local_ip() -> str:
     except Exception:
         pass
 
-    # Método 2: wildcard - buscar en todas las interfaces comunes
+    # Método 2: wildcard - buscar en todas las interfaces
+    # NOTA: /sys/class/net puede no ser accesible en Android 10+ (PermissionError)
     import os
-    for iface_dir in os.listdir("/sys/class/net"):
-        if iface_dir == "lo":
-            continue
-        try:
-            result = subprocess.run(
-                ["ip", "addr", "show", iface_dir],
-                capture_output=True, text=True, timeout=3
-            )
-            if result.returncode == 0:
-                match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout)
-                if match:
-                    return match.group(1)
-        except Exception:
-            continue
+    try:
+        for iface_dir in os.listdir("/sys/class/net"):
+            if iface_dir == "lo":
+                continue
+            try:
+                result = subprocess.run(
+                    ["ip", "addr", "show", iface_dir],
+                    capture_output=True, text=True, timeout=3
+                )
+                if result.returncode == 0:
+                    match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout)
+                    if match:
+                        return match.group(1)
+            except Exception:
+                continue
+    except (PermissionError, FileNotFoundError):
+        pass
 
     # Método 3: ifconfig wildcard (legacy)
     try:

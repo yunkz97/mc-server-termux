@@ -154,9 +154,9 @@ class FilebrowserManager:
         try:
             self._log("Configurando Filebrowser...")
 
-            # Inicializar base de datos con noauth desde el inicio
+            # 1. Inicializar DB con json (necesario para users add)
             result = subprocess.run(
-                [str(self.binary), "config", "init", "--database", str(self.db_file), "--auth.method", "noauth"],
+                [str(self.binary), "config", "init", "--database", str(self.db_file)],
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
@@ -164,7 +164,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # Configurar puerto y root
+            # 2. Configurar puerto y root
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -186,14 +186,16 @@ class FilebrowserManager:
                 self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # Intentar agregar usuario (no crítico con noauth)
+            # 3. Agregar usuario admin con permisos completos
+            fb_user = self.settings.filebrowser_user or "admin"
+            fb_pass = self.settings.filebrowser_password or "admin12345678"
             result = subprocess.run(
                 [
                     str(self.binary),
                     "users",
                     "add",
-                    self.settings.filebrowser_user or "admin",
-                    self.settings.filebrowser_password or "admin12345678",
+                    fb_user,
+                    fb_pass,
                     "--perm.admin",
                     "--perm.execute",
                     "--perm.create",
@@ -208,10 +210,42 @@ class FilebrowserManager:
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
-                add_out = result.stderr.strip() or result.stdout.strip() or "users add failed"
-                self._log(f"users add (no crítico con noauth): {add_out}")
+                # Si el usuario ya existe, actualizar
+                add_out = result.stderr.strip() or result.stdout.strip()
+                if "already exists" in add_out.lower() or "duplicate" in add_out.lower():
+                    result = subprocess.run(
+                        [
+                            str(self.binary),
+                            "users",
+                            "update",
+                            fb_user,
+                            "--password", fb_pass,
+                            "--database", str(self.db_file),
+                        ],
+                        capture_output=True, text=True,
+                    )
+                if result.returncode != 0:
+                    self.last_error = result.stderr.strip() or result.stdout.strip() or "users add/update failed"
+                    self._log(f"ERROR users add/update: {self.last_error}")
+                    return False
 
-            self._log("Filebrowser configurado correctamente (auth: noauth)")
+            # 4. Cambiar a noauth (usuario ID 1 queda como default, sin login)
+            result = subprocess.run(
+                [
+                    str(self.binary),
+                    "config",
+                    "set",
+                    "--auth.method", "noauth",
+                    "--database", str(self.db_file),
+                ],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config set noauth failed"
+                self._log(f"ERROR config set noauth: {self.last_error}")
+                return False
+
+            self._log("Filebrowser configurado (auth: noauth, usuario ID 1)")
             return True
 
         except Exception as e:
@@ -279,9 +313,9 @@ class FilebrowserManager:
                 self._log("Eliminando base de datos anterior...")
                 self.db_file.unlink()
 
-            # 2. Inicializar DB fresca con noauth desde el inicio
+            # 2. Inicializar DB fresca con json (necesario para users add)
             result = subprocess.run(
-                [str(self.binary), "config", "init", "--database", str(self.db_file), "--auth.method", "noauth"],
+                [str(self.binary), "config", "init", "--database", str(self.db_file)],
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
@@ -289,7 +323,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config init: {self.last_error}")
                 return False
 
-            # 3. Configurar puerto y root
+            # 3. Configurar puerto, root y usuario con json auth
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -307,7 +341,7 @@ class FilebrowserManager:
                 self._log(f"ERROR config set: {self.last_error}")
                 return False
 
-            # 4. Agregar usuario (opcional con noauth, no falla si falla)
+            # 4. Agregar usuario con permisos admin (requiere json auth)
             result = subprocess.run(
                 [
                     str(self.binary),
@@ -329,10 +363,27 @@ class FilebrowserManager:
                 capture_output=True, text=True,
             )
             if result.returncode != 0:
-                add_out = result.stderr.strip() or result.stdout.strip() or "users add failed"
-                self._log(f"users add (no crítico con noauth): {add_out}")
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "users add failed"
+                self._log(f"ERROR users add: {self.last_error}")
+                return False
 
-            # 5. Guardar en settings
+            # 5. Cambiar a noauth (usuario ID 1 queda como default)
+            result = subprocess.run(
+                [
+                    str(self.binary),
+                    "config",
+                    "set",
+                    "--auth.method", "noauth",
+                    "--database", str(self.db_file),
+                ],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                self.last_error = result.stderr.strip() or result.stdout.strip() or "config set noauth failed"
+                self._log(f"ERROR config set noauth: {self.last_error}")
+                return False
+
+            # 6. Guardar en settings
             self.settings.save({
                 "FILEBROWSER_USER": username,
                 "FILEBROWSER_PASSWORD": password
@@ -340,7 +391,7 @@ class FilebrowserManager:
             self.settings.filebrowser_user = username
             self.settings.filebrowser_password = password
 
-            self._log(f"Configuración manual completada con éxito para {username}")
+            self._log(f"Configuración manual completada: usuario {username}, auth noauth")
             return True
 
         except Exception as e:

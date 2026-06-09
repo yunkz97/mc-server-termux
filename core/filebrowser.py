@@ -76,6 +76,11 @@ class FilebrowserManager:
                 self._log("Filebrowser iniciado correctamente")
                 return True
             else:
+                # Leer log para dar más información del error
+                if self.log_file.exists():
+                    log_content = self.log_file.read_text()
+                    if log_content.strip():
+                        self._log(f"Filebrowser log:\n{log_content}")
                 self._log("Filebrowser no inició en el tiempo esperado")
                 return False
 
@@ -141,14 +146,16 @@ class FilebrowserManager:
             self._log("Configurando Filebrowser...")
 
             # Inicializar base de datos
-            subprocess.run(
+            result = subprocess.run(
                 [str(self.binary), "config", "init", "--database", str(self.db_file)],
-                check=True,
-                capture_output=True,
+                capture_output=True, text=True,
             )
+            if result.returncode != 0:
+                self._log(f"ERROR config init: {result.stderr.strip() or result.stdout.strip()}")
+                return False
 
             # Configurar puerto y root
-            subprocess.run(
+            result = subprocess.run(
                 [
                     str(self.binary),
                     "config",
@@ -162,12 +169,14 @@ class FilebrowserManager:
                     "--database",
                     str(self.db_file),
                 ],
-                check=True,
-                capture_output=True,
+                capture_output=True, text=True,
             )
+            if result.returncode != 0:
+                self._log(f"ERROR config set: {result.stderr.strip() or result.stdout.strip()}")
+                return False
 
             # Agregar usuario
-            subprocess.run(
+            result = subprocess.run(
                 [
                     str(self.binary),
                     "users",
@@ -185,9 +194,11 @@ class FilebrowserManager:
                     "--database",
                     str(self.db_file),
                 ],
-                check=True,
-                capture_output=True,
+                capture_output=True, text=True,
             )
+            if result.returncode != 0:
+                self._log(f"ERROR users add: {result.stderr.strip() or result.stdout.strip()}")
+                return False
 
             self._log("Filebrowser configurado correctamente")
             return True

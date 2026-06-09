@@ -321,7 +321,13 @@ download_project() {
 
     if [ -d "$BASE_DIR/.git" ]; then
         cd "$BASE_DIR"
-        git pull origin main 2>&1 | grep -v "^$"
+        # Guardar cambios locales antes de actualizar
+        git stash -m "installer-auto-stash" 2>/dev/null || true
+        git pull origin main 2>&1 | grep -v "^$" || {
+            log_error "Error al actualizar — restaurando cambios locales"
+            git stash pop 2>/dev/null || true
+            exit 1
+        }
     else
         git clone "https://github.com/${REPO_USER}/${REPO_NAME}.git" "$BASE_DIR" 2>&1 | grep -v "^$"
     fi

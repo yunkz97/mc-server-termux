@@ -74,6 +74,17 @@ class PlayitManager:
             # Limpiar log anterior
             self.log_file.write_text("")
 
+            # Limpiar socket/lock residual de la config de Playit
+            # (si un inicio anterior murió, el socket puede quedar huérfano)
+            playit_config_dir = Path.home() / ".config" / "playit_gg"
+            if playit_config_dir.exists():
+                for stale in playit_config_dir.glob("*.sock"):
+                    try:
+                        stale.unlink()
+                        self._log(f"Socket residual eliminado: {stale}")
+                    except OSError:
+                        pass
+
             # Determinar el runner: termux-chroot si está disponible, si no directo
             runner = self._get_proot_runner()
 

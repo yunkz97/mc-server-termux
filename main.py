@@ -628,26 +628,45 @@ class MCServerManager:
         print()
 
     def update_system(self):
-        """Actualiza el sistema."""
+        """Actualiza el sistema vía git pull."""
         print()
         print_box("🆙 ACTUALIZAR SISTEMA")
         print()
 
         log_info("Esta opción descargará la última versión del sistema")
-        log_warning("Se recomienda hacer backup antes")
+        log_warning("Los servicios deben estar detenidos antes de actualizar")
         print()
 
         if not prompt_yes_no("¿Continuar con la actualización?"):
             log_info("Actualización cancelada")
             return
 
+        log_step("Deteniendo servicios...")
+        self.stop_all()
+
         log_step("Descargando actualizaciones...")
-        # Aquí iría la lógica de git pull
-        # Por ahora solo un placeholder
-        log_info("Función de actualización en desarrollo")
-        log_info("Por ahora, actualiza manualmente con:")
-        print(f"  cd {self.settings.base_dir}")
-        print("  git pull")
+        import subprocess
+        try:
+            # Stash local changes to avoid merge conflicts
+            subprocess.run(
+                ["git", "stash"],
+                cwd=str(self.settings.base_dir),
+                capture_output=True, text=True,
+            )
+            result = subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=str(self.settings.base_dir),
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                log_success("¡Sistema actualizado!")
+                print()
+                print(result.stdout.strip())
+            else:
+                log_error("Error actualizando:")
+                print(result.stderr.strip() or result.stdout.strip())
+        except Exception as e:
+            log_error(f"Error: {e}")
 
     # =============================================================================
     # SETUP WIZARD

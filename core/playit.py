@@ -74,27 +74,21 @@ class PlayitManager:
             # Limpiar log anterior
             self.log_file.write_text("")
 
-            # Limpiar socket/lock residual de la config de Playit
-            # (si un inicio anterior murió, el socket puede quedar huérfano)
-            playit_config_dir = Path.home() / ".config" / "playit_gg"
-            if playit_config_dir.exists():
-                for stale in playit_config_dir.glob("*.sock"):
-                    try:
-                        stale.unlink()
-                        self._log(f"Socket residual eliminado: {stale}")
-                    except OSError:
-                        pass
-
-            # Determinar el runner: termux-chroot si está disponible, si no directo
+            # Asegurar que /etc/playit existe (playit v0.17.x escribe el secret ahí)
+            # En Termux necesitamos termux-chroot para crear el directorio
             runner = self._get_proot_runner()
+            if runner:
+                try:
+                    subprocess.run(
+                        runner + ["mkdir", "-p", "/etc/playit"],
+                        timeout=10, capture_output=True
+                    )
+                except Exception:
+                    pass
 
-            # Asegurar que el directorio de config existe
-            playit_config_dir = Path.home() / ".config" / "playit_gg"
-            playit_config_dir.mkdir(parents=True, exist_ok=True)
-
-            # Iniciador del proceso con socket-path explícito (necesario en Termux)
-            socket_path = str(playit_config_dir / "playit.sock")
-            cmd = runner + [str(self.binary), "--socket-path", socket_path]
+            # Comando: termux-chroot ./bin/playit --stdout
+            # --stdout fuerza logs a stdout en lugar de TUI (necesario para captura)
+            cmd = runner + [str(self.binary), "--stdout"]
 
             self.process = subprocess.Popen(
                 cmd,
@@ -223,7 +217,10 @@ class PlayitManager:
             log_content = self.log_file.read_text(errors='ignore')
 
             # Buscar indicadores de conexión exitosa
+            # v0.17.x: "tunnel running, N tunnels registered"
+            # v1.0.x: "agent connected", "tunnel established", etc.
             success_indicators = [
+                "tunnel running",
                 "agent connected",
                 "tunnel established",
                 "tcp://",

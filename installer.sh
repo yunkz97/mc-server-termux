@@ -387,13 +387,13 @@ download_binaries() {
 
     case "$arch" in
         aarch64|arm64)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-aarch64"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/download/v0.17.1/playit-linux-aarch64"
             ;;
         armv7l|armv8l)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-armv7"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/download/v0.17.1/playit-linux-armv7"
             ;;
         x86_64)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-amd64"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/download/v0.17.1/playit-linux-amd64"
             ;;
         *)
             log_warning "Arquitectura no soportada: $arch"
@@ -585,6 +585,14 @@ main() {
 
     # Binarios
     download_binaries
+    echo ""
+
+    # Crear directorio /etc/playit vía termux-chroot (necesario para que
+    # playit v0.17.x pueda escribir su archivo de secret sin dar error)
+    log_step "Configurando directorio de secret de Playit..."
+    termux-chroot mkdir -p /etc/playit 2>/dev/null || true
+    log_success "Directorio de secret configurado"
+
     echo ""
 
     # Configuración

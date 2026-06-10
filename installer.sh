@@ -387,13 +387,13 @@ download_binaries() {
 
     case "$arch" in
         aarch64|arm64)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-aarch64"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-aarch64"
             ;;
         armv7l|armv8l)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-armv7"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-armv7"
             ;;
         x86_64)
-            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-x86_64"
+            playit_url="https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-cli-linux-amd64"
             ;;
         *)
             log_warning "Arquitectura no soportada: $arch"

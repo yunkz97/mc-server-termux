@@ -63,15 +63,8 @@ class MinecraftServer:
                 stdin_pipe=True,
             )
 
-            # Esperar a que inicie
-            self._log("Esperando inicio del servidor...")
-            if self._wait_for_startup(timeout=60):
-                self._log("Servidor iniciado correctamente")
-                return True
-            else:
-                self._log("El servidor no inició en el tiempo esperado")
-                self.stop()
-                return False
+            self._log("Servidor lanzado — usa el menú para verificar estado")
+            return True
 
         except Exception as e:
             self._log(f"ERROR iniciando servidor: {e}")
@@ -284,60 +277,6 @@ class MinecraftServer:
         command.extend(["-jar", str(self.jar_path), "nogui"])
 
         return command
-
-    def _wait_for_startup(self, timeout: int = 60) -> bool:
-        """
-        Espera a que el servidor inicie completamente.
-
-        Args:
-            timeout: Tiempo máximo de espera
-
-        Returns:
-            True si inició correctamente
-        """
-        start_time = time.time()
-
-        # Primero verificar que el proceso exista
-        if not self.pm.wait_for_process(self.pid_file, timeout=10):
-            return False
-
-        # Luego buscar indicadores en el log
-        success_indicators = [
-            "Done (",  # Minecraft vanilla
-            "Done!",  # Algunos mods
-            "Time elapsed:",
-            "starting minecraft server",
-        ]
-
-        while time.time() - start_time < timeout:
-            if not self.is_running():
-                self._log("El proceso terminó inesperadamente")
-                return False
-
-            if self.log_file.exists():
-                try:
-                    log_content = self.log_file.read_text(errors="ignore")
-
-                    for indicator in success_indicators:
-                        if indicator.lower() in log_content.lower():
-                            return True
-
-                    # Verificar errores críticos
-                    if (
-                        "error" in log_content.lower()
-                        and "fatal" in log_content.lower()
-                    ):
-                        self._log("Se detectó un error fatal en el servidor")
-                        return False
-
-                except Exception:
-                    pass
-
-            time.sleep(2)
-
-        # Timeout alcanzado
-        self._log("Timeout esperando inicio del servidor")
-        return False
 
     def get_status(self) -> dict:
         """

@@ -235,6 +235,8 @@ class MinecraftServer:
     def _build_java_command(self) -> List[str]:
         """
         Construye el comando Java con flags apropiadas.
+        Usa el sistema de argumentos nativo de NeoForge (@args files)
+        para mejor compatibilidad con el modloader.
 
         Returns:
             Lista con el comando completo
@@ -273,10 +275,44 @@ class MinecraftServer:
         else:
             command.extend([f"-Xmx{self.settings.java_ram}", "-Xms512M"])
 
-        # JAR y opciones
-        command.extend(["-jar", str(self.jar_path), "nogui"])
+        # Sistema de argumentos nativo de NeoForge
+        # user_jvm_args.txt permite al usuario agregar flags custom
+        # unix_args.txt contiene los argumentos del modloader
+        user_jvm_args = self.server_dir / "user_jvm_args.txt"
+        neoforge_args = self._find_neoforge_args()
+
+        if neoforge_args:
+            # Modo NeoForge: usar @args files
+            if user_jvm_args.exists():
+                command.append(f"@{user_jvm_args}")
+            command.append(f"@{neoforge_args}")
+            command.append("nogui")
+        else:
+            # Fallback: JAR directo (para vanilla, Fabric, etc.)
+            command.extend(["-jar", str(self.jar_path), "nogui"])
 
         return command
+
+    def _find_neoforge_args(self) -> Optional[str]:
+        """
+        Busca el archivo unix_args.txt de NeoForge en el classpath.
+
+        Returns:
+            Ruta al archivo de arguments de NeoForge, o None si no se encuentra
+        """
+        libs_dir = self.server_dir / "libraries"
+        if not libs_dir.exists():
+            return None
+
+        # Buscar en libraries/net/neoforged/neoforge/*/unix_args.txt
+        import glob
+        pattern = str(libs_dir / "net" / "neoforged" / "neoforge" / "*" / "unix_args.txt")
+        matches = glob.glob(pattern)
+
+        if matches:
+            return matches[0]
+
+        return None
 
     def get_status(self) -> dict:
         """
